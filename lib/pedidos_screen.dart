@@ -12,7 +12,6 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
-  // 1. URL BASE CORRECTA (Asegúrate que coincida con tu estructura)
   final String baseUrl = "https://cerrodelivery.com";
 
   List<dynamic> pedidos = [];
@@ -23,7 +22,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
   void initState() {
     super.initState();
     cargarPedidos();
-    // Polling cada 10 segundos
+    // Actualización automática cada 10 segundos
     _timer = Timer.periodic(Duration(seconds: 10), (timer) {
       cargarPedidos(silencioso: true);
     });
@@ -36,92 +35,77 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   Future<void> cargarPedidos({bool silencioso = false}) async {
-    // 2. USAMOS EL ARCHIVO QUE SABEMOS QUE FUNCIONA (pedidos_ok.php)
-    // Y volvemos a usar el ID real de la sesión
-    // Apunta al archivo correcto (pedidos.php o pedidos_ok.php, el que hayas guardado)
-    String archivoApi = "/api/pedidos_ok.php";
+    // 1. TRUCO ANTI-CACHE: Agregamos la hora actual para que la URL sea siempre distinta
+    // y el celular se vea obligado a descargar los datos nuevos.
+    String cacheBuster = DateTime.now().millisecondsSinceEpoch.toString();
 
-    // Vuelve a usar Sesion.id para ver TUS pedidos reales
-    String params = "?accion=listar&id_cliente=${Sesion.id}";
+    // Asegúrate de usar el archivo que SÍ funciona (pedidos.php o pedidos_ok.php)
+    String archivoApi = "/api/pedidos.php";
+
+    // Usamos tu ID de sesión real
+    String params = "?accion=listar&id_cliente=${Sesion.id}&v=$cacheBuster";
 
     String url = "$baseUrl$archivoApi$params";
 
-    print("🚀 CONSULTANDO: $url");
+    if (!silencioso) print("🚀 ACTUALIZANDO PEDIDOS...");
 
     try {
       var res = await http.get(
         Uri.parse(url),
         headers: {
           "Accept": "application/json",
-          "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", // Disfraz anti-bloqueo
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         },
       );
 
       if (res.statusCode == 200) {
         String bodyLimpio = res.body.trim();
-        print("📦 RESPUESTA SERVER: $bodyLimpio"); // Debug
 
-        // 3. PROTECCIÓN CONTRA RESPUESTAS VACÍAS O HTML DE ERROR
+        // Validación de seguridad
         if (bodyLimpio.isEmpty || bodyLimpio.startsWith("<")) {
-          print("⚠️ Error: El servidor devolvió HTML o vacío.");
+          // Si el servidor falla silenciosamente, no hacemos nada para no molestar al usuario
           return;
         }
 
         try {
-          // Decodificamos
           var data = jsonDecode(bodyLimpio);
 
           if (mounted) {
             setState(() {
-              // 4. ASEGURAR QUE SEA UNA LISTA
               if (data is List) {
                 pedidos = data;
               } else {
-                print("⚠️ La respuesta no es una lista: $data");
                 pedidos = [];
               }
               if (!silencioso) cargando = false;
             });
           }
         } catch (e) {
-          print("❌ Error al leer JSON: $e");
+          print("❌ Error JSON: $e");
         }
-      } else {
-        print("❌ ERROR HTTP: ${res.statusCode}");
-        if (mounted && !silencioso) setState(() => cargando = false);
       }
     } catch (e) {
-      print("💥 ERROR DE CONEXIÓN: $e");
-      if (mounted && !silencioso) {
-        setState(() => cargando = false);
-      }
+      print("💥 Error Conexión: $e");
     }
   }
 
-  // ... (RESTO DE TUS FUNCIONES: _acelerarPedido, build, etc. IGUAL QUE ANTES) ...
-  // COPIA AQUÍ TUS FUNCIONES _acelerarPedido, _mostrarDialogoCalificar, build, etc.
-  // SON LAS MISMAS QUE YA TIENES.
-
-  // --- ABRIR WHATSAPP ---
+  // ... (Tus funciones auxiliares siguen igual) ...
   Future<void> _acelerarPedido(
-    String telefonoRestaurante,
-    String nombreRestaurante,
+    String telefonoRest,
+    String nombreRest,
     String idPedido,
   ) async {
-    if (telefonoRestaurante == "null" || telefonoRestaurante.isEmpty) {
+    if (telefonoRest == "null" || telefonoRest.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("El restaurante no tiene WhatsApp registrado")),
+        SnackBar(content: Text("El restaurante no tiene WhatsApp")),
       );
       return;
     }
-
     String mensaje =
-        "Hola *$nombreRestaurante*, hice un pedido en la App de CerroDelivery (Pedido #$idPedido) y quisiera consultar su estado. 🛵💨";
+        "Hola *$nombreRest*, consulta sobre mi pedido #$idPedido 🛵";
     final Uri url = Uri.parse(
-      "https://wa.me/51$telefonoRestaurante?text=${Uri.encodeComponent(mensaje)}",
+      "https://wa.me/51$telefonoRest?text=${Uri.encodeComponent(mensaje)}",
     );
-
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       ScaffoldMessenger.of(
         context,
@@ -130,11 +114,12 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   void _mostrarDialogoCalificar(int idRestaurante, String nombreRest) {
-    // Pega aquí tu lógica de calificación
+    // Tu lógica de calificar aquí...
   }
 
   Color getColorEstado(String estado) {
-    switch (estado.toLowerCase()) {
+    // Limpiamos espacios por si acaso
+    switch (estado.trim().toLowerCase()) {
       case 'pendiente':
         return Colors.orange.shade300;
       case 'confirmado':
@@ -142,7 +127,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
       case 'preparando':
         return Colors.orange.shade800;
       case 'en camino':
-        return Colors.blue;
+        return Colors.blue; // <--- AQUÍ DEBE COINCIDIR
       case 'entregado':
         return Colors.green;
       case 'cancelado':
@@ -193,36 +178,35 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.receipt_long, size: 60, color: Colors.orange),
-          ),
-          SizedBox(height: 20),
-          Text(
-            "Sin historial de pedidos",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ],
+      child: Text(
+        "Sin historial de pedidos",
+        style: TextStyle(fontSize: 18, color: Colors.grey),
       ),
     );
   }
 
   Widget _buildPedidoCard(dynamic p) {
-    String estado = p['estado_pedido'].toString().toLowerCase();
+    // 2. LIMPIEZA CRÍTICA: Quitamos espacios y pasamos a minúsculas
+    String estadoRaw = p['estado_pedido'].toString(); // Texto original
+    String estado = estadoRaw.trim().toLowerCase(); // Texto limpio
+
+    // DEBUG: Ver qué estado llega realmente
+    print(
+      "🔍 Pedido #${p['id']} - Estado Original: '$estadoRaw' -> Limpio: '$estado'",
+    );
+
+    // 3. LÓGICA DE BOTONES
     bool mostrarBotonAcelerar = [
       'pendiente',
       'confirmado',
       'preparando',
     ].contains(estado);
+
+    // OJO: El texto aquí debe ser idéntico al de tu base de datos (en minúsculas)
     bool mostrarBotonRastrear = estado == 'en camino';
+
     bool mostrarBotonCalificar = estado == 'entregado';
+
     String telefonoRest = p['telefono_restaurante'] ?? '';
 
     return Container(
@@ -240,6 +224,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
       ),
       child: Column(
         children: [
+          // CABECERA
           Padding(
             padding: EdgeInsets.all(15),
             child: Row(
@@ -257,12 +242,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
                       width: 55,
                       height: 55,
                       fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => Container(
-                        width: 55,
-                        height: 55,
-                        color: Colors.orange[50],
-                        child: Icon(Icons.store, color: Colors.orange),
-                      ),
+                      errorBuilder: (c, e, s) =>
+                          Icon(Icons.store, color: Colors.orange, size: 40),
                     ),
                   ),
                 ),
@@ -289,11 +270,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: getColorEstado(p['estado_pedido']),
+                    color: getColorEstado(estado),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    getTextoEstado(p['estado_pedido']),
+                    getTextoEstado(estado),
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -304,10 +285,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 15),
-            child: Divider(height: 1),
-          ),
+          Divider(height: 1),
+          // PRECIO
           Padding(
             padding: EdgeInsets.all(15),
             child: Row(
@@ -331,6 +310,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
               ],
             ),
           ),
+          // BOTONES DE ACCIÓN
           if (mostrarBotonAcelerar ||
               mostrarBotonRastrear ||
               mostrarBotonCalificar)
@@ -360,6 +340,8 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         ),
                       ),
                     ),
+
+                  // AQUÍ ESTÁ EL BOTÓN DE RASTREAR
                   if (mostrarBotonRastrear)
                     Expanded(
                       child: ElevatedButton.icon(
@@ -380,6 +362,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
                         },
                       ),
                     ),
+
                   if (mostrarBotonCalificar)
                     Expanded(
                       child: OutlinedButton.icon(
