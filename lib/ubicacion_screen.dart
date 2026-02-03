@@ -17,8 +17,7 @@ class UbicacionScreen extends StatefulWidget {
 
 class _UbicacionScreenState extends State<UbicacionScreen> {
   // ⚠️ TU URL DE NGROK
-  final String baseUrl =
-      "https://unclinical-ungeometrically-elenor.ngrok-free.dev/cerrodeliveryv2";
+  final String baseUrl = "https://cerrodelivery.com";
 
   MapController _mapController = MapController();
   LatLng _ubicacionCliente = LatLng(-10.683, -76.256); // Default Pasco
