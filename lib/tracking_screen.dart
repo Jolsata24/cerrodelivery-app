@@ -132,19 +132,42 @@ class _TrackingScreenState extends State<TrackingScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar:
+          true, // Esto hace que el mapa suba hasta arriba del todo
       appBar: AppBar(
-        title: Text(
-          "Pedido #${widget.pedidoId}",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        title: Container(
+          padding: EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+          ),
+          child: Text(
+            "Pedido #${widget.pedidoId}",
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        backgroundColor: _repartidorAsignado ? Colors.blue : Colors.orange,
-        iconTheme: IconThemeData(color: Colors.white),
+        backgroundColor: Colors.transparent, // Transparente para ver el mapa
+        elevation: 0,
+        leading: Container(
+          margin: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back, color: Colors.black87, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
         centerTitle: true,
       ),
       body: Stack(
@@ -152,59 +175,102 @@ class _TrackingScreenState extends State<TrackingScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter:
-                  _ubicacionRepartidor, // Inicia donde sea (luego se mueve)
+              initialCenter: _ubicacionRepartidor,
               initialZoom: 15,
             ),
             children: [
+              // 1. EL NUEVO MAPA SUAVE
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate:
+                    'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.cerrodelivery.app',
               ),
+
+              // 2. MARCADORES ESTILO "UBER" (Burbujas con sombra)
               MarkerLayer(
                 markers: [
                   // 📍 MARCADOR DE CASA (DESTINO)
                   if (_ubicacionDestino != null)
                     Marker(
                       point: _ubicacionDestino!,
-                      width: 50,
-                      height: 50,
-                      child: Icon(
-                        Icons.home_filled,
-                        size: 40,
-                        color: Colors.red,
+                      width: 80,
+                      height: 80,
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.home_rounded,
+                              size: 28,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                          // Triangulito simulado
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 24,
+                            color: Colors.black26,
+                          ),
+                        ],
                       ),
                     ),
 
-                  // 🛵 MARCADOR DEL REPARTIDOR
+                  // 🛵 MARCADOR DEL REPARTIDOR (MOTO)
                   if (_repartidorAsignado)
                     Marker(
                       point: _ubicacionRepartidor,
-                      width: 70,
-                      height: 70,
+                      width: 80,
+                      height: 80,
                       child: Column(
                         children: [
-                          Icon(
-                            Icons.two_wheeler, // Icono de moto
-                            size: 40,
-                            color: Colors.blue[800],
+                          Container(
+                            padding: EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors
+                                  .black87, // Fondo oscuro para resaltar la moto
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black38,
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.delivery_dining,
+                              size: 30,
+                              color: Colors.white,
+                            ),
                           ),
                           Container(
+                            margin: EdgeInsets.only(top: 2),
                             padding: EdgeInsets.symmetric(
-                              horizontal: 4,
+                              horizontal: 6,
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(5),
+                              borderRadius: BorderRadius.circular(4),
                               boxShadow: [
-                                BoxShadow(blurRadius: 2, color: Colors.black26),
+                                BoxShadow(blurRadius: 2, color: Colors.black12),
                               ],
                             ),
                             child: Text(
-                              "Repartidor",
+                              "Tu pedido",
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -217,96 +283,119 @@ class _TrackingScreenState extends State<TrackingScreen> {
             ],
           ),
 
-          // 🎯 BOTÓN PARA CENTRAR
+          // 🎯 BOTÓN DE CENTRAR FLOTANTE (Minimalista)
           Positioned(
             right: 20,
-            bottom: 180,
+            bottom: 240, // Un poco más arriba de la tarjeta
             child: FloatingActionButton(
               heroTag: "centrar_btn",
               backgroundColor: Colors.white,
-              child: Icon(Icons.my_location, color: Colors.blue),
+              elevation: 4,
+              mini: true, // Más pequeño y elegante
+              child: Icon(Icons.gps_fixed, color: Colors.black87),
               onPressed: _centrarMapa,
             ),
           ),
 
-          // 📋 TARJETA DE INFORMACIÓN (BOTTOM SHEET)
+          // 📋 TARJETA DE INFORMACIÓN MODERNA (Sin bordes duros)
           Positioned(
-            bottom: 20,
+            bottom: 30,
             left: 20,
             right: 20,
             child: Container(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.all(25),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(30), // Bordes muy redondos
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 15,
-                    offset: Offset(0, 5),
+                    color: Colors.black.withOpacity(0.1), // Sombra muy suave
+                    blurRadius: 20,
+                    offset: Offset(0, 10),
                   ),
                 ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Barra decorativa
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  SizedBox(height: 15),
-
                   if (_cargando)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        CircularProgressIndicator(color: Colors.orange),
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.orange,
+                          ),
+                        ),
                         SizedBox(width: 15),
-                        Text("Conectando con el repartidor..."),
+                        Text(
+                          "Localizando...",
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     )
                   else if (!_repartidorAsignado)
                     Column(
                       children: [
-                        Icon(
-                          Icons.person_search,
-                          size: 50,
-                          color: Colors.orange,
+                        Container(
+                          padding: EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.search_rounded,
+                            size: 30,
+                            color: Colors.orange,
+                          ),
                         ),
                         SizedBox(height: 10),
                         Text(
                           "Buscando Repartidor",
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
                           ),
                         ),
+                        SizedBox(height: 5),
                         Text(
-                          "Tu pedido está siendo procesado.",
-                          style: TextStyle(color: Colors.grey),
+                          "Estamos notificando a los conductores cerca.",
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     )
                   else
                     Row(
                       children: [
-                        // Avatar del Repartidor
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.blue[100],
-                          child: Icon(
-                            Icons.person,
-                            color: Colors.blue,
-                            size: 30,
+                        // Avatar Grande y Limpio
+                        Container(
+                          padding: EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.green.withOpacity(0.5),
+                              width: 2,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 25,
+                            backgroundColor: Colors.grey[100],
+                            backgroundImage: AssetImage(
+                              'assets/img/repartidor.jpg',
+                            ), // Asegúrate de tener una imagen default
+                            child: Icon(Icons.person, color: Colors.grey),
                           ),
                         ),
                         SizedBox(width: 15),
-                        // Datos del Repartidor
+
+                        // Textos
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,41 +403,51 @@ class _TrackingScreenState extends State<TrackingScreen> {
                               Text(
                                 _nombreRepartidor,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
                                 ),
                               ),
+                              SizedBox(height: 4),
                               Row(
                                 children: [
-                                  Icon(
-                                    Icons.circle,
-                                    size: 10,
-                                    color: Colors.green,
-                                  ),
-                                  SizedBox(width: 5),
-                                  Text(
-                                    _estadoTexto,
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _estadoTexto.toUpperCase(),
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                              if (_telefonoRepartidor.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Text(
-                                    "📞 $_telefonoRepartidor",
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ),
+
+                        // Botón de Llamar (Circular)
+                        if (_telefonoRepartidor.isNotEmpty)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.phone, color: Colors.green),
+                              onPressed: () {
+                                // Aquí podrías agregar url_launcher para llamar real
+                              },
+                            ),
+                          ),
                       ],
                     ),
                 ],

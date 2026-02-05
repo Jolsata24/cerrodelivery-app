@@ -3,13 +3,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'main.dart';
 import 'menu_screen.dart';
 import 'pedidos_screen.dart';
 import 'carrito_screen.dart';
-import 'sesion.dart';
 import 'profile_screen.dart';
+import 'sesion.dart';
 
+// ============================================================================
+// 🏠 HOME SCREEN (Contenedor Principal)
+// ============================================================================
 class HomeScreen extends StatefulWidget {
   final String nombreUsuario;
   HomeScreen({required this.nombreUsuario});
@@ -35,47 +37,72 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: _pantallas[_indiceActual],
+      backgroundColor: Colors.white,
+      body: IndexedStack(index: _indiceActual, children: _pantallas),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
           color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: Offset(0, -5),
+            ),
+          ],
         ),
         child: BottomNavigationBar(
           currentIndex: _indiceActual,
           onTap: (index) => setState(() => _indiceActual = index),
-          selectedItemColor: Colors.orange,
-          unselectedItemColor: Colors.grey,
-          showUnselectedLabels: true,
+          selectedItemColor: Colors.deepOrange,
+          unselectedItemColor: Colors.grey[400],
           backgroundColor: Colors.white,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          selectedLabelStyle: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+          unselectedLabelStyle: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 11,
+          ),
           items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
+              icon: Icon(Icons.home_rounded),
               label: 'Inicio',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long),
+              icon: Icon(Icons.receipt_long_rounded),
               label: 'Pedidos',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
+              icon: Icon(Icons.person_rounded),
               label: 'Cuenta',
             ),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.deepOrange,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Icon(Icons.shopping_bag_outlined, color: Colors.white),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (c) => CarritoScreen()),
+          );
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
 
 // ============================================================================
-// ✨ PANTALLA DE INICIO (Header Fijo + Scroll Abajo) ✨
+// ✨ PANTALLA DE INICIO
 // ============================================================================
 class PantallaInicio extends StatefulWidget {
   final String nombreUsuario;
@@ -85,28 +112,62 @@ class PantallaInicio extends StatefulWidget {
   _PantallaInicioState createState() => _PantallaInicioState();
 }
 
-class _PantallaInicioState extends State<PantallaInicio> {
+class _PantallaInicioState extends State<PantallaInicio>
+    with TickerProviderStateMixin {
   final String baseUrl = "https://cerrodelivery.com";
 
   List<dynamic> restaurantes = [];
   List<dynamic> categorias = [];
   bool cargando = true;
-  String direccionActual = "Cargando ubicación...";
+  String direccionActual = "Detectando ubicación...";
   String categoriaSeleccionada = "";
   TextEditingController searchController = TextEditingController();
+
+  late AnimationController _listController;
+
+  // DICCIONARIO DE ICONOS 3D
+  final Map<String, String> iconos3D = {
+    'hamburguesa': 'https://cdn-icons-png.flaticon.com/512/2983/2983067.png',
+    'pollo': 'https://cdn-icons-png.flaticon.com/512/6679/6679109.png',
+    'broaster': 'https://cdn-icons-png.flaticon.com/512/10574/10574768.png',
+    'chaufa': 'https://cdn-icons-png.flaticon.com/512/590/590797.png',
+    'marisco': 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png',
+    'parrilla': 'https://cdn-icons-png.flaticon.com/512/1134/1134447.png',
+    'salchipapa': 'https://cdn-icons-png.flaticon.com/512/1046/1046784.png',
+    'bebida': 'https://cdn-icons-png.flaticon.com/512/2405/2405479.png',
+    'postre': 'https://cdn-icons-png.flaticon.com/512/3081/3081967.png',
+    'default': 'https://cdn-icons-png.flaticon.com/512/737/737967.png',
+  };
+
+  String _getIconoUrl(String nombreCategoria) {
+    String nombre = nombreCategoria.toLowerCase();
+    for (var key in iconos3D.keys) {
+      if (nombre.contains(key)) return iconos3D[key]!;
+    }
+    return iconos3D['default']!;
+  }
 
   @override
   void initState() {
     super.initState();
+    _listController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1000),
+    );
     cargarDatos();
-    _detectarDireccionHeader();
+    _detectarDireccion();
   }
 
-  Future<void> _detectarDireccionHeader() async {
+  @override
+  void dispose() {
+    _listController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _detectarDireccion() async {
     bool servicio = await Geolocator.isLocationServiceEnabled();
     if (!servicio) {
-      if (mounted)
-        setState(() => direccionActual = "Cerro de Pasco (GPS Apagado)");
+      if (mounted) setState(() => direccionActual = "Pasco (Activa tu GPS)");
       return;
     }
     LocationPermission permiso = await Geolocator.checkPermission();
@@ -121,23 +182,20 @@ class _PantallaInicioState extends State<PantallaInicio> {
           pos.latitude,
           pos.longitude,
         );
-        if (marks.isNotEmpty) {
-          if (mounted)
-            setState(
-              () => direccionActual =
-                  "${marks[0].thoroughfare} ${marks[0].subThoroughfare}, ${marks[0].subLocality}",
-            );
+        if (marks.isNotEmpty && mounted) {
+          setState(
+            () => direccionActual =
+                "${marks[0].thoroughfare} ${marks[0].subThoroughfare}",
+          );
         }
       } catch (e) {
-        if (mounted)
-          setState(() => direccionActual = "Ubicación actual detectada");
+        if (mounted) setState(() => direccionActual = "Ubicación actual");
       }
     }
   }
 
   Future<void> cargarDatos() async {
-    await cargarCategorias();
-    await cargarRestaurantes();
+    await Future.wait([cargarCategorias(), cargarRestaurantes()]);
   }
 
   Future<void> cargarCategorias() async {
@@ -145,11 +203,8 @@ class _PantallaInicioState extends State<PantallaInicio> {
       var res = await http.get(
         Uri.parse("$baseUrl/api/obtener_categorias.php"),
       );
-      if (res.statusCode == 200) {
-        if (mounted)
-          setState(() {
-            categorias = jsonDecode(res.body);
-          });
+      if (res.statusCode == 200 && mounted) {
+        setState(() => categorias = jsonDecode(res.body));
       }
     } catch (e) {
       print(e);
@@ -160,296 +215,113 @@ class _PantallaInicioState extends State<PantallaInicio> {
     String query = "",
     String catId = "",
   }) async {
-    if (mounted)
-      setState(() {
-        cargando = true;
-      });
+    if (mounted) setState(() => cargando = true);
     try {
       var res = await http.get(
         Uri.parse("$baseUrl/api/obtener_restaurantes.php?q=$query&cat=$catId"),
       );
-      if (res.statusCode == 200) {
-        if (mounted)
-          setState(() {
-            restaurantes = jsonDecode(res.body);
-            cargando = false;
-          });
-      }
-    } catch (e) {
-      if (mounted)
+      if (res.statusCode == 200 && mounted) {
         setState(() {
+          restaurantes = jsonDecode(res.body);
           cargando = false;
         });
+        _listController.forward(from: 0);
+      }
+    } catch (e) {
+      if (mounted) setState(() => cargando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    var populares = restaurantes
-        .where((r) => double.parse(r['puntuacion_promedio'].toString()) >= 4.5)
-        .toList();
-
-    List<dynamic> categoriasGrandes = categorias.take(2).toList();
-    List<dynamic> categoriasPequenas = categorias.skip(2).toList();
+    var populares = restaurantes.where((r) {
+      var punt = double.tryParse(r['puntuacion_promedio'].toString()) ?? 0.0;
+      return punt >= 4.5;
+    }).toList();
 
     return Column(
-      // ⬅️ Usamos Column en lugar de SingleChildScrollView principal
       children: [
-        // 1. ZONA FIJA (Header Naranja + Buscador)
-        Container(
-          height: 190, // Altura fija para el encabezado
-          child: Stack(
-            children: [
-              // Fondo Naranja Curvo
-              Container(
-                height: 160, // El naranja llega hasta aquí
-                padding: EdgeInsets.fromLTRB(20, 50, 20, 20),
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(30),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Entregar en 📍",
-                            style: TextStyle(
-                              color: Colors.orange[100],
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  direccionActual,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                              Icon(
-                                Icons.keyboard_arrow_down,
-                                size: 20,
-                                color: Colors.white,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.shopping_bag_outlined,
-                          color: Colors.white,
-                        ),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (c) => CarritoScreen()),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Buscador Flotante (Fijo en la parte baja del Stack)
-              Positioned(
-                bottom: 0, // Pegado al fondo del contenedor de 190px
-                left: 20,
-                right: 20,
-                child: Container(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 15,
-                        offset: Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: searchController,
-                    decoration: InputDecoration(
-                      hintText: "¿Qué vas a comer hoy?",
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.search, color: Colors.orange),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (texto) => cargarRestaurantes(query: texto),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 2. ZONA SCROLLEABLE (El resto del contenido)
+        _buildColorfulHeader(),
         Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(top: 20, bottom: 20),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              physics: BouncingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 80),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // CARRUSEL DE PROMOCIONES
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    child: Row(
-                      children: [
-                        _buildPromoCard(
-                          "Envío Gratis",
-                          "Primer pedido",
-                          Colors.orangeAccent,
-                          Icons.motorcycle,
-                        ),
-                        _buildPromoCard(
-                          "2x1 Burgers",
-                          "Solo hoy",
-                          Colors.redAccent,
-                          Icons.lunch_dining,
-                        ),
-                        _buildPromoCard(
-                          "Dscto Pollo",
-                          "30% Off",
-                          Colors.amber[700]!,
-                          Icons.local_fire_department,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // CATEGORÍAS MIXTAS
-                  SizedBox(height: 25),
-                  Text(
-                    "Explora por Categorías",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 15),
-
-                  categorias.isEmpty
-                      ? Center(child: CircularProgressIndicator())
-                      : Column(
-                          children: [
-                            if (categoriasGrandes.isNotEmpty)
-                              Row(
-                                children: categoriasGrandes
-                                    .map(
-                                      (c) => Expanded(
-                                        child: Padding(
-                                          padding: EdgeInsets.only(
-                                            right: categoriasGrandes.last == c
-                                                ? 0
-                                                : 10,
-                                          ),
-                                          child: _buildBigCategoryCard(c),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-
-                            SizedBox(height: 10),
-
-                            if (categoriasPequenas.isNotEmpty)
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 4,
-                                      childAspectRatio: 0.8,
-                                      crossAxisSpacing: 10,
-                                      mainAxisSpacing: 10,
-                                    ),
-                                itemCount: categoriasPequenas.length,
-                                itemBuilder: (c, i) => _buildSmallCategoryCard(
-                                  categoriasPequenas[i],
-                                ),
-                              ),
-                          ],
-                        ),
-
-                  // LO MÁS POPULAR
-                  if (populares.isNotEmpty) ...[
-                    SizedBox(height: 25),
-                    Text(
-                      "Los Favoritos ⭐",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                  if (categorias.isNotEmpty) ...[
+                    _buildSectionTitle("Categorías"),
+                    SizedBox(height: 15),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      child: Row(
+                        children: categorias
+                            .map((c) => _buildCategoryChip(c))
+                            .toList(),
                       ),
                     ),
+                    SizedBox(height: 30),
+                  ],
+
+                  if (populares.isNotEmpty) ...[
+                    _buildSectionTitle("Los Favoritos ⭐"),
                     SizedBox(height: 15),
                     Container(
-                      height: 210,
+                      height:
+                          250, // Aumentamos altura para que quepan los badges
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         clipBehavior: Clip.none,
                         itemCount: populares.length,
-                        itemBuilder: (c, i) =>
-                            _buildRestauranteHorizontal(populares[i]),
+                        itemBuilder: (c, i) => _buildPopularCard(populares[i]),
                       ),
                     ),
+                    SizedBox(height: 30),
                   ],
 
-                  // TODOS LOS RESTAURANTES
-                  SizedBox(height: 25),
-                  Text(
-                    "Todos los Restaurantes",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  _buildSectionTitle("Restaurantes"),
                   SizedBox(height: 15),
+
                   cargando
-                      ? Center(child: CircularProgressIndicator())
+                      ? Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(
+                              color: Colors.deepOrange,
+                            ),
+                          ),
+                        )
                       : ListView.builder(
                           physics: NeverScrollableScrollPhysics(),
                           shrinkWrap: true,
                           itemCount: restaurantes.length,
-                          itemBuilder: (c, i) =>
-                              _buildRestauranteVertical(restaurantes[i]),
+                          itemBuilder: (context, index) {
+                            final Animation<double> animation =
+                                Tween<double>(begin: 0.0, end: 1.0).animate(
+                                  CurvedAnimation(
+                                    parent: _listController,
+                                    curve: Interval(
+                                      (1 / restaurantes.length) * index,
+                                      1.0,
+                                      curve: Curves.easeOutQuart,
+                                    ),
+                                  ),
+                                );
+                            return AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) => Transform.translate(
+                                offset: Offset(0, 30 * (1 - animation.value)),
+                                child: Opacity(
+                                  opacity: animation.value,
+                                  child: child,
+                                ),
+                              ),
+                              child: _buildRestaurantCard(restaurantes[index]),
+                            );
+                          },
                         ),
                 ],
               ),
@@ -460,221 +332,292 @@ class _PantallaInicioState extends State<PantallaInicio> {
     );
   }
 
-  // --- WIDGETS AUXILIARES ---
+  // --- WIDGETS DE DISEÑO ---
 
-  Widget _buildBigCategoryCard(dynamic c) {
-    bool esActiva = categoriaSeleccionada == c['id'].toString();
-    String imgUrl =
-        "$baseUrl/assets/img/categorias/${c['imagen_app'] ?? 'default.png'}";
+  Widget _buildSectionTitle(String title) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.deepOrange,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: Colors.black,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildColorfulHeader() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(25, 50, 25, 25),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFF8C00), Color(0xFFFF5722)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepOrange.withOpacity(0.3),
+            blurRadius: 15,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Entregar en 📍",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      direccionActual,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white24,
+                ),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, color: Colors.deepOrange),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 25),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: searchController,
+              onChanged: (val) =>
+                  cargarRestaurantes(query: val, catId: categoriaSeleccionada),
+              style: TextStyle(color: Colors.black87),
+              decoration: InputDecoration(
+                hintText: "¿Qué se te antoja hoy?",
+                hintStyle: TextStyle(color: Colors.grey[400]),
+                prefixIcon: Icon(Icons.search, color: Colors.deepOrange),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(dynamic cat) {
+    bool isSelected = categoriaSeleccionada == cat['id'].toString();
+    String imgUrl = _getIconoUrl(cat['nombre_categoria']);
+
     return GestureDetector(
-      onTap: () => _seleccionarCategoria(c['id'].toString()),
-      child: Container(
-        height: 90,
+      onTap: () => _seleccionarCategoria(cat['id'].toString()),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 300),
+        margin: EdgeInsets.only(right: 15),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
+          color: isSelected ? Colors.deepOrange : Colors.grey[100],
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: Colors.deepOrange.withOpacity(0.3),
+                blurRadius: 8,
+                offset: Offset(0, 4),
+              ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Image.network(imgUrl, height: 24, width: 24),
+            SizedBox(width: 8),
+            Text(
+              cat['nombre_categoria'],
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // TARJETA POPULAR (Horizontal) - Ahora con Tiempo y Estrellas
+  Widget _buildPopularCard(dynamic rest) {
+    return GestureDetector(
+      onTap: () => _irAlMenu(rest),
+      child: Container(
+        width: 200, // Un poco más ancha
+        margin: EdgeInsets.only(right: 15, bottom: 10, top: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.grey.withOpacity(0.2),
               blurRadius: 10,
               offset: Offset(0, 5),
             ),
           ],
-          image: DecorationImage(
-            image: NetworkImage(imgUrl),
-            fit: BoxFit.cover,
-          ),
-          border: esActiva ? Border.all(color: Colors.orange, width: 2) : null,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Colors.black87],
-            ),
-          ),
-          alignment: Alignment.bottomLeft,
-          padding: EdgeInsets.all(12),
-          child: Text(
-            c['nombre_categoria'],
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSmallCategoryCard(dynamic c) {
-    bool esActiva = categoriaSeleccionada == c['id'].toString();
-    return GestureDetector(
-      onTap: () => _seleccionarCategoria(c['id'].toString()),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: Offset(0, 3),
-            ),
-          ],
-          border: esActiva ? Border.all(color: Colors.orange, width: 2) : null,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.network(
-              "$baseUrl/assets/img/categorias/${c['imagen_app'] ?? 'default.png'}",
-              height: 40,
-              width: 40,
-              fit: BoxFit.contain,
-            ),
-            SizedBox(height: 8),
-            Text(
-              c['nombre_categoria'],
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _seleccionarCategoria(String id) {
-    setState(
-      () => categoriaSeleccionada = categoriaSeleccionada == id ? "" : id,
-    );
-    cargarRestaurantes(
-      query: searchController.text,
-      catId: categoriaSeleccionada,
-    );
-  }
-
-  Widget _buildPromoCard(
-    String titulo,
-    String subtitulo,
-    Color color,
-    IconData icon,
-  ) {
-    return Container(
-      width: 140,
-      height: 80,
-      margin: EdgeInsets.only(right: 10),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.4),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  titulo,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  subtitulo,
-                  style: TextStyle(color: Colors.white70, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          Icon(icon, color: Colors.white.withOpacity(0.8), size: 30),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRestauranteHorizontal(dynamic r) {
-    String imgUrl =
-        "$baseUrl/assets/img/restaurantes/${r['imagen_fondo'] ?? 'default.png'}";
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (c) => MenuScreen(
-            restaurantId: r['id'].toString(),
-            restaurantName: r['nombre_restaurante'],
-            restaurantImage: imgUrl,
-          ),
-        ),
-      ),
-      child: Container(
-        width: 160,
-        margin: EdgeInsets.only(right: 15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: Offset(0, 5),
-            ),
-          ],
+          border: Border.all(color: Colors.grey[100]!),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-              child: Image.network(
-                imgUrl,
-                height: 110,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (c, e, s) =>
-                    Container(height: 110, color: Colors.grey[200]),
-              ),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Image.network(
+                    "$baseUrl/assets/img/restaurantes/${rest['imagen_fondo'] ?? 'default.png'}",
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (c, e, s) => Container(
+                      height: 120,
+                      color: Colors.orange[50],
+                      child: Icon(Icons.store, color: Colors.orange),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(blurRadius: 5, color: Colors.black12),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          rest['puntuacion_promedio'] ?? "4.5",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
             Padding(
-              padding: EdgeInsets.all(10),
+              padding: EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    r['nombre_restaurante'],
+                    rest['nombre_restaurante'],
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Colors.black87,
+                    ),
                   ),
-                  SizedBox(height: 4),
+                  SizedBox(height: 8),
+
+                  // NUEVO: FILA DE DATOS (Tiempo y Envío)
                   Row(
                     children: [
-                      Icon(Icons.star, size: 14, color: Colors.orange),
-                      SizedBox(width: 4),
+                      // Badge Tiempo
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 12,
+                              color: Colors.blue[800],
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              rest['tiempo_entrega'] ?? "30-45 min",
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue[900],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // Texto Envío Gratis
                       Text(
-                        r['puntuacion_promedio'],
+                        "Envío gratis",
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
+                          color: Colors.green[700],
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -689,51 +632,36 @@ class _PantallaInicioState extends State<PantallaInicio> {
     );
   }
 
-  Widget _buildRestauranteVertical(dynamic r) {
-    String imgUrl =
-        "$baseUrl/assets/img/restaurantes/${r['imagen_fondo'] ?? 'default.png'}";
+  // TARJETA VERTICAL - Ahora con Tiempo y Estrellas grandes
+  Widget _buildRestaurantCard(dynamic rest) {
+    bool abierto = rest['estado'] == 'activo'; // Usamos 'activo' según tu BD
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (c) => MenuScreen(
-            restaurantId: r['id'].toString(),
-            restaurantName: r['nombre_restaurante'],
-            restaurantImage: imgUrl,
-          ),
-        ),
-      ),
+      onTap: () => abierto ? _irAlMenu(rest) : null,
       child: Container(
         margin: EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.grey.withOpacity(0.15),
               blurRadius: 15,
               offset: Offset(0, 5),
             ),
           ],
+          border: Border.all(color: Colors.grey[100]!),
         ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(15),
-                bottomLeft: Radius.circular(15),
-              ),
+              borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
               child: Image.network(
-                imgUrl,
+                "$baseUrl/assets/img/restaurantes/${rest['imagen_fondo'] ?? 'default.png'}",
                 width: 110,
                 height: 110,
                 fit: BoxFit.cover,
-                errorBuilder: (c, e, s) => Container(
-                  width: 110,
-                  height: 110,
-                  color: Colors.grey[200],
-                  child: Icon(Icons.store),
-                ),
+                errorBuilder: (c, e, s) =>
+                    Container(width: 110, height: 110, color: Colors.grey[200]),
               ),
             ),
             Expanded(
@@ -742,49 +670,110 @@ class _PantallaInicioState extends State<PantallaInicio> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      r['nombre_restaurante'],
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            rest['nombre_restaurante'],
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ),
+                        if (!abierto)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              "Cerrado",
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    SizedBox(height: 5),
+                    SizedBox(height: 4),
                     Text(
-                      r['direccion'] ?? "Cerro de Pasco",
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      rest['direccion'] ?? "Pasco, Perú",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      maxLines: 1,
                     ),
                     SizedBox(height: 8),
+
+                    // --- NUEVA FILA DE INFO (Badge Time + Badge Star) ---
                     Row(
                       children: [
+                        // 1. TIEMPO
                         Container(
                           padding: EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.orange[50],
-                            borderRadius: BorderRadius.circular(5),
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.star, size: 12, color: Colors.orange),
+                              Icon(
+                                Icons.access_time_rounded,
+                                size: 14,
+                                color: Colors.grey[700],
+                              ),
+                              SizedBox(width: 4),
                               Text(
-                                " ${r['puntuacion_promedio']}",
+                                rest['tiempo_entrega'] ?? "20-30 min",
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11,
+                                  color: Colors.grey[800],
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.orange,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        SizedBox(width: 10),
-                        Icon(Icons.access_time, size: 14, color: Colors.grey),
-                        Text(
-                          " 20-30 min",
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        SizedBox(width: 8),
+                        // 2. ESTRELLAS
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.amber[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.star_rounded,
+                                size: 16,
+                                color: Colors.amber[800],
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                rest['puntuacion_promedio'] ?? "4.5",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  color: Colors.amber[900],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -793,6 +782,31 @@ class _PantallaInicioState extends State<PantallaInicio> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _seleccionarCategoria(String id) {
+    setState(
+      () => categoriaSeleccionada = (categoriaSeleccionada == id) ? "" : id,
+    );
+    cargarRestaurantes(
+      query: searchController.text,
+      catId: categoriaSeleccionada,
+    );
+  }
+
+  void _irAlMenu(dynamic rest) {
+    String imgUrl =
+        "$baseUrl/assets/img/restaurantes/${rest['imagen_fondo'] ?? 'default.png'}";
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (c) => MenuScreen(
+          restaurantId: rest['id'].toString(),
+          restaurantName: rest['nombre_restaurante'],
+          restaurantImage: imgUrl,
         ),
       ),
     );

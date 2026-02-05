@@ -284,11 +284,12 @@ class _UbicacionScreenState extends State<UbicacionScreen> {
                               },
                             ),
                             children: [
+                              // REEMPLAZAR EL TILELAYER ACTUAL POR ESTE:
                               TileLayer(
+                                // Estilo "Positron" (Gris suave y limpio)
                                 urlTemplate:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName:
-                                    'com.example.app_delivery_cliente',
+                                    'https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.cerrodelivery.app',
                               ),
                             ],
                           ),
